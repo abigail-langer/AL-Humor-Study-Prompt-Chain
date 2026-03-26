@@ -71,18 +71,13 @@ export default function ImageDescriptionTool() {
 
       if (!response.ok) {
         const upstreamDetail =
-          typeof data.upstream === 'string'
-            ? data.upstream
-            : data.upstream && typeof data.upstream === 'object'
-              ? JSON.stringify(data.upstream)
-              : null
+          data.upstream && typeof data.upstream === 'object'
+            ? ` Upstream: ${JSON.stringify(data.upstream)}`
+            : typeof data.upstream === 'string'
+              ? ` Upstream: ${data.upstream}`
+              : ''
 
-        const apiBaseDetail =
-          typeof data.apiBase === 'string' ? ` API base: ${data.apiBase}.` : ''
-
-        throw new Error(
-          `${data.error ?? 'Failed to describe image'}${apiBaseDetail}${upstreamDetail ? ` Upstream: ${upstreamDetail}` : ''}`
-        )
+        throw new Error(`${data.error ?? 'Failed to describe image'}${upstreamDetail}`)
       }
 
       setResult(data as DescribeResponse)

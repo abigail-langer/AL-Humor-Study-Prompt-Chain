@@ -177,11 +177,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      {
-        error:
-          'Could not extract image description from upstream response. Set IMAGE_DESCRIBE_PATH to your exact endpoint.',
-        tried
-      },
+      { error: 'Could not extract image description from upstream response.', tried },
       { status: 502 }
     )
   } catch (error: unknown) {
