@@ -16,10 +16,13 @@ Then open `http://localhost:3000`.
 Create a `.env.local` with:
 
 ```bash
-ALMOSTCRACKD_API_BASE_URL=https://api.almostcrackd.ai
-ALMOSTCRACKD_API_TOKEN=your_api_token_here
+NEXT_PUBLIC_SUPABASE_URL=https://secure.almostcrackd.ai
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_public_key_here
+ADMIN_EMAILS=you@example.com
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+SUPABASE_URL=https://api.almostcrackd.ai
 # Optional override if your description endpoint path differs.
-ALMOSTCRACKD_DESCRIBE_PATH=/pipeline/generate-image-description
+IMAGE_DESCRIBE_PATH=/pipeline/generate-image-description
 ```
 
 ## Current scope

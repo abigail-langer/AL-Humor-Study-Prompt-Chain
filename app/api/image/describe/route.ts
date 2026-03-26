@@ -1,8 +1,17 @@
 import { NextResponse } from 'next/server'
 
-const API_BASE = process.env.ALMOSTCRACKD_API_BASE_URL ?? 'https://api.almostcrackd.ai'
-const API_TOKEN = process.env.ALMOSTCRACKD_API_TOKEN
-const DESCRIBE_PATH = process.env.ALMOSTCRACKD_DESCRIBE_PATH
+const API_BASE =
+  process.env.SUPABASE_URL ??
+  process.env.NEXT_PUBLIC_SUPABASE_URL ??
+  process.env.ALMOSTCRACKD_API_BASE_URL ??
+  'https://api.almostcrackd.ai'
+
+const API_TOKEN =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  process.env.ALMOSTCRACKD_API_TOKEN
+
+const DESCRIBE_PATH = process.env.IMAGE_DESCRIBE_PATH ?? process.env.ALMOSTCRACKD_DESCRIBE_PATH
 
 const SUPPORTED_TYPES = new Set([
   'image/jpeg',
@@ -82,7 +91,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Missing ALMOSTCRACKD_API_TOKEN. Configure this env var to enable image description generation.'
+            'Missing SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY fallback). Configure this env var to enable image description generation.'
         },
         { status: 500 }
       )
@@ -210,7 +219,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          'Could not extract image description from upstream response. Set ALMOSTCRACKD_DESCRIBE_PATH to your exact endpoint.',
+          'Could not extract image description from upstream response. Set IMAGE_DESCRIBE_PATH to your exact endpoint.',
         tried
       },
       { status: 502 }
