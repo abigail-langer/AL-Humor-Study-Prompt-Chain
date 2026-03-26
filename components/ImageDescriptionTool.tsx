@@ -23,6 +23,7 @@ export default function ImageDescriptionTool() {
   const [result, setResult] = useState<DescribeResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [diagnostics, setDiagnostics] = useState<unknown>(null)
 
   const canSubmit = useMemo(() => image && !loading, [image, loading])
 
@@ -57,6 +58,7 @@ export default function ImageDescriptionTool() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setDiagnostics(null)
 
     try {
       const formData = new FormData()
@@ -70,14 +72,8 @@ export default function ImageDescriptionTool() {
       const data = await response.json()
 
       if (!response.ok) {
-        const upstreamDetail =
-          data.upstream && typeof data.upstream === 'object'
-            ? ` Upstream: ${JSON.stringify(data.upstream)}`
-            : typeof data.upstream === 'string'
-              ? ` Upstream: ${data.upstream}`
-              : ''
-
-        throw new Error(`${data.error ?? 'Failed to describe image'}${upstreamDetail}`)
+        if (data.tried) setDiagnostics(data.tried)
+        throw new Error(data.error ?? 'Failed to describe image')
       }
 
       setResult(data as DescribeResponse)
@@ -118,6 +114,15 @@ export default function ImageDescriptionTool() {
         </form>
 
         {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+
+        {diagnostics ? (
+          <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+            <p className="mb-1 text-xs font-semibold uppercase text-yellow-700">Endpoint diagnostics</p>
+            <pre className="whitespace-pre-wrap break-all text-xs text-yellow-900">
+              {JSON.stringify(diagnostics, null, 2)}
+            </pre>
+          </div>
+        ) : null}
 
         {result ? (
           <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">

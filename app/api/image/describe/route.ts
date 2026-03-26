@@ -159,12 +159,12 @@ export async function POST(request: Request) {
       '/pipeline/generate-description'
     ]
 
-    const tried: Array<{ path: string; status: number }> = []
+    const tried: Array<{ path: string; status: number; data: unknown }> = []
 
     for (const path of describePaths) {
       for (const payload of [{ imageId }, { image_id: imageId }]) {
         const describe = await postUpstream(path, payload, token)
-        tried.push({ path, status: describe.status })
+        tried.push({ path, status: describe.status, data: describe.data })
 
         if (!describe.ok) continue
 
