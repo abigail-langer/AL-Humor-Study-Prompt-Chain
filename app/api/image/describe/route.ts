@@ -1,10 +1,24 @@
 import { NextResponse } from 'next/server'
 
-const API_BASE =
-  process.env.SUPABASE_URL ??
-  process.env.NEXT_PUBLIC_SUPABASE_URL ??
-  process.env.ALMOSTCRACKD_API_BASE_URL ??
-  'https://api.almostcrackd.ai'
+function pickApiBase(): string {
+  const candidates = [
+    process.env.PIPELINE_API_BASE_URL,
+    process.env.ALMOSTCRACKD_API_BASE_URL,
+    process.env.SUPABASE_URL
+  ]
+
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    // Ignore Supabase project URLs and secure app URLs for pipeline API calls.
+    if (candidate.includes('.supabase.co')) continue
+    if (candidate.includes('secure.almostcrackd.ai')) continue
+    return candidate
+  }
+
+  return 'https://api.almostcrackd.ai'
+}
+
+const API_BASE = pickApiBase()
 
 const API_TOKEN =
   process.env.SUPABASE_SERVICE_ROLE_KEY ??
@@ -122,6 +136,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: 'Failed to create upload URL',
+          apiBase: API_BASE,
           upstream: presign.data
         },
         { status: presign.status || 502 }
