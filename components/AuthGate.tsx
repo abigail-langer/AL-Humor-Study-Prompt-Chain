@@ -11,6 +11,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const authError = params.get('auth_error')
+    if (authError) setError(authError)
+
     if (!supabase) {
       setLoading(false)
       return
