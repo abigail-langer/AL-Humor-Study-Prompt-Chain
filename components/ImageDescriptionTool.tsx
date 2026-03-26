@@ -72,7 +72,7 @@ export default function ImageDescriptionTool() {
       const data = await response.json()
 
       if (!response.ok) {
-        if (data.tried) setDiagnostics(data.tried)
+        setDiagnostics(data.upstream ?? data.tried ?? null)
         throw new Error(data.error ?? 'Failed to describe image')
       }
 
