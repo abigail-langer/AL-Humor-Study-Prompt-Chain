@@ -1,31 +1,7 @@
 import { NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabaseServer'
 
-function pickApiBase(): string {
-  const candidates = [
-    process.env.PIPELINE_API_BASE_URL,
-    process.env.ALMOSTCRACKD_API_BASE_URL,
-    process.env.SUPABASE_URL
-  ]
-
-  for (const candidate of candidates) {
-    if (!candidate) continue
-    // Ignore Supabase project URLs and secure app URLs for pipeline API calls.
-    if (candidate.includes('.supabase.co')) continue
-    if (candidate.includes('secure.almostcrackd.ai')) continue
-    return candidate
-  }
-
-  return 'https://api.almostcrackd.ai'
-}
-
-const API_BASE = pickApiBase()
-
-const API_TOKEN =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-  process.env.ALMOSTCRACKD_API_TOKEN
-
-const DESCRIBE_PATH = process.env.IMAGE_DESCRIBE_PATH ?? process.env.ALMOSTCRACKD_DESCRIBE_PATH
+const API_BASE = 'https://api.almostcrackd.ai'
 
 const SUPPORTED_TYPES = new Set([
   'image/jpeg',
@@ -44,10 +20,7 @@ type UpstreamResult = {
 
 async function parseJsonOrText(response: Response): Promise<unknown> {
   const text = await response.text()
-  if (!text) {
-    return null
-  }
-
+  if (!text) return null
   try {
     return JSON.parse(text)
   } catch {
@@ -55,44 +28,38 @@ async function parseJsonOrText(response: Response): Promise<unknown> {
   }
 }
 
-async function postUpstream(path: string, payload: Record<string, unknown>): Promise<UpstreamResult> {
+async function postUpstream(
+  path: string,
+  payload: Record<string, unknown>,
+  token: string
+): Promise<UpstreamResult> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${API_TOKEN}`
+      Authorization: `Bearer ${token}`
     },
     body: JSON.stringify(payload)
   })
 
   const data = await parseJsonOrText(response)
 
-  return {
-    ok: response.ok,
-    status: response.status,
-    data
-  }
+  return { ok: response.ok, status: response.status, data }
 }
 
 function extractDescription(data: unknown): string | null {
-  if (typeof data === 'string') {
-    return data
-  }
+  if (typeof data === 'string') return data
 
   if (data && typeof data === 'object') {
     const record = data as Record<string, unknown>
-    const candidates = [
+    for (const value of [
       record.description,
       record.imageDescription,
       record.image_description,
       record.text,
       record.output
-    ]
-
-    for (const value of candidates) {
-      if (typeof value === 'string' && value.trim().length > 0) {
-        return value
-      }
+    ]) {
+      if (typeof value === 'string' && value.trim().length > 0) return value
     }
   }
 
@@ -101,15 +68,16 @@ function extractDescription(data: unknown): string | null {
 
 export async function POST(request: Request) {
   try {
-    if (!API_TOKEN) {
-      return NextResponse.json(
-        {
-          error:
-            'Missing SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY fallback). Configure this env var to enable image description generation.'
-        },
-        { status: 500 }
-      )
+    const supabase = createSupabaseServerClient()
+    const {
+      data: { session }
+    } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
     }
+
+    const token = session.access_token
 
     const formData = await request.formData()
     const image = formData.get('image')
@@ -120,25 +88,20 @@ export async function POST(request: Request) {
 
     if (!SUPPORTED_TYPES.has(image.type)) {
       return NextResponse.json(
-        {
-          error:
-            'Unsupported image type. Use JPEG, PNG, WebP, GIF, or HEIC.'
-        },
+        { error: 'Unsupported image type. Use JPEG, PNG, WebP, GIF, or HEIC.' },
         { status: 400 }
       )
     }
 
-    const presign = await postUpstream('/pipeline/generate-presigned-url', {
-      contentType: image.type
-    })
+    const presign = await postUpstream(
+      '/pipeline/generate-presigned-url',
+      { contentType: image.type },
+      token
+    )
 
     if (!presign.ok) {
       return NextResponse.json(
-        {
-          error: 'Failed to create upload URL',
-          apiBase: API_BASE,
-          upstream: presign.data
-        },
+        { error: 'Failed to create upload URL', upstream: presign.data },
         { status: presign.status || 502 }
       )
     }
@@ -149,19 +112,14 @@ export async function POST(request: Request) {
 
     if (typeof presignedUrl !== 'string' || typeof cdnUrl !== 'string') {
       return NextResponse.json(
-        {
-          error: 'Presign response missing presignedUrl/cdnUrl',
-          upstream: presign.data
-        },
+        { error: 'Presign response missing presignedUrl/cdnUrl', upstream: presign.data },
         { status: 502 }
       )
     }
 
     const upload = await fetch(presignedUrl, {
       method: 'PUT',
-      headers: {
-        'Content-Type': image.type
-      },
+      headers: { 'Content-Type': image.type },
       body: Buffer.from(await image.arrayBuffer())
     })
 
@@ -172,17 +130,15 @@ export async function POST(request: Request) {
       )
     }
 
-    const register = await postUpstream('/pipeline/upload-image-from-url', {
-      imageUrl: cdnUrl,
-      isCommonUse: false
-    })
+    const register = await postUpstream(
+      '/pipeline/upload-image-from-url',
+      { imageUrl: cdnUrl, isCommonUse: false },
+      token
+    )
 
     if (!register.ok) {
       return NextResponse.json(
-        {
-          error: 'Failed to register uploaded image',
-          upstream: register.data
-        },
+        { error: 'Failed to register uploaded image', upstream: register.data },
         { status: register.status || 502 }
       )
     }
@@ -192,41 +148,30 @@ export async function POST(request: Request) {
 
     if (typeof imageId !== 'string') {
       return NextResponse.json(
-        {
-          error: 'Register response missing imageId',
-          upstream: register.data
-        },
+        { error: 'Register response missing imageId', upstream: register.data },
         { status: 502 }
       )
     }
 
-    const describePaths = DESCRIBE_PATH
-      ? [DESCRIBE_PATH]
-      : [
-          '/pipeline/generate-image-description',
-          '/pipeline/describe-image',
-          '/pipeline/generate-description'
-        ]
+    const describePaths = [
+      '/pipeline/generate-image-description',
+      '/pipeline/describe-image',
+      '/pipeline/generate-description'
+    ]
 
     const tried: Array<{ path: string; status: number }> = []
 
     for (const path of describePaths) {
       for (const payload of [{ imageId }, { image_id: imageId }]) {
-        const describe = await postUpstream(path, payload)
+        const describe = await postUpstream(path, payload, token)
         tried.push({ path, status: describe.status })
 
-        if (!describe.ok) {
-          continue
-        }
+        if (!describe.ok) continue
 
         const description = extractDescription(describe.data)
 
         if (description) {
-          return NextResponse.json({
-            imageId,
-            cdnUrl,
-            description
-          })
+          return NextResponse.json({ imageId, cdnUrl, description })
         }
       }
     }
