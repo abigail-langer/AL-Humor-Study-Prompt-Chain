@@ -184,11 +184,22 @@ export async function POST(request: Request) {
       )
     }
 
-    const description = extractDescription(captions.data)
+    // The pipeline stores the image description in the images table.
+    // Fetch it directly from Supabase now that the pipeline has run.
+    const { data: imageRecord, error: dbError } = await supabase
+      .from('images')
+      .select('image_description')
+      .eq('id', imageId)
+      .single()
+
+    const description = imageRecord?.image_description
 
     if (!description) {
       return NextResponse.json(
-        { error: 'Could not extract image description from upstream response.', upstream: captions.data },
+        {
+          error: 'Image description not found after pipeline ran.',
+          dbError: dbError?.message ?? null
+        },
         { status: 502 }
       )
     }
