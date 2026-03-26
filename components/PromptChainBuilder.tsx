@@ -83,7 +83,7 @@ export default function PromptChainBuilder() {
   const roleOptions: PromptChainRole[] = ['system', 'user', 'assistant']
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-6 py-8">
       <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-bold">Prompt Chain Tool</h1>
         <p className="mt-2 text-sm text-gray-600">
@@ -202,6 +202,6 @@ export default function PromptChainBuilder() {
           </div>
         </div>
       </section>
-    </main>
+    </div>
   )
 }
