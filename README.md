@@ -28,11 +28,7 @@ ALMOSTCRACKD_DESCRIBE_PATH=/pipeline/generate-image-description
 - Variable interpolation across chain steps (`{{input}}`, `{{step_n_output}}`)
 - API route at `POST /api/prompt-chain/run` for chain execution
 - Simulated step outputs as placeholder for upcoming model integration
-- Image-to-description workflow (`POST /api/image/describe`) that:
-- requests presigned upload URL
-- uploads the image
-- registers the image in pipeline
-- requests a generated image description
+- Image-to-description workflow (`POST /api/image/describe`) using presign, upload, register, and describe pipeline steps
 
 ## Notes
 
