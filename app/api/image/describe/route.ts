@@ -3,15 +3,15 @@ import { NextResponse } from 'next/server'
 function pickApiBase(): string {
   const candidates = [
     process.env.PIPELINE_API_BASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.ALMOSTCRACKD_API_BASE_URL,
     process.env.SUPABASE_URL
   ]
 
   for (const candidate of candidates) {
     if (!candidate) continue
-    // Ignore Supabase project host URLs for pipeline API calls.
+    // Ignore Supabase project URLs and secure app URLs for pipeline API calls.
     if (candidate.includes('.supabase.co')) continue
+    if (candidate.includes('secure.almostcrackd.ai')) continue
     return candidate
   }
 

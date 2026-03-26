@@ -20,7 +20,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://secure.almostcrackd.ai
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_public_key_here
 ADMIN_EMAILS=you@example.com
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
-# Optional explicit pipeline API host override.
+# Pipeline API host (use api.almostcrackd.ai, not secure.almostcrackd.ai).
 PIPELINE_API_BASE_URL=https://api.almostcrackd.ai
 # Keep SUPABASE_URL as your Supabase project URL.
 SUPABASE_URL=https://your-project.supabase.co
