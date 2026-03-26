@@ -1,33 +1,63 @@
+import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+
+const PUBLIC_PATHS = [
+  '/login',
+  '/auth/callback',
+  '/_next',
+  '/favicon.ico',
+]
+
+function isPublic(pathname: string) {
+  return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
+}
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next()
+  const { pathname } = request.nextUrl
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (isPublic(pathname)) {
+    const res = NextResponse.next()
+    res.headers.set('x-pathname', pathname)
+    return res
+  }
 
-  if (!supabaseUrl || !supabaseAnonKey) return response
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  let response = NextResponse.next({ request })
+
+  const supabase = createServerClient(url, key, {
     cookies: {
-      get(name) {
-        return request.cookies.get(name)?.value
+      getAll() {
+        return request.cookies.getAll()
       },
-      set(name, value, options) {
-        response.cookies.set({ name, value, ...options })
-      },
-      remove(name, options) {
-        response.cookies.set({ name, value: '', ...options })
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) =>
+          request.cookies.set(name, value)
+        )
+        response = NextResponse.next({ request })
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options)
+        )
       },
     },
   })
 
-  await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = '/login'
+    loginUrl.searchParams.set('next', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  response.headers.set('x-pathname', pathname)
   return response
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }

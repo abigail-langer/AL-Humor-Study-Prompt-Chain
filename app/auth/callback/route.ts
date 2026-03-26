@@ -1,44 +1,34 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const errorParam = searchParams.get('error')
-  const errorDescription = searchParams.get('error_description')
-
-  if (errorParam) {
-    const msg = errorDescription ?? errorParam
-    return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(msg)}`)
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.redirect(
-      `${origin}/?auth_error=${encodeURIComponent('Supabase environment variables are not configured.')}`
-    )
-  }
+  const next = searchParams.get('next') ?? '/'
 
   if (!code) {
-    return NextResponse.redirect(
-      `${origin}/?auth_error=${encodeURIComponent('No authorization code returned from provider.')}`
-    )
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
   }
 
-  const response = NextResponse.redirect(`${origin}/`)
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url || !key) {
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
+  }
+
+  const cookieStore = cookies()
+  const response = NextResponse.redirect(`${origin}${next}`)
+
+  const supabase = createServerClient(url, key, {
     cookies: {
-      get(name) {
-        return request.cookies.get(name)?.value
-      },
-      set(name, value, options) {
-        response.cookies.set({ name, value, ...options })
-      },
-      remove(name, options) {
-        response.cookies.set({ name, value: '', ...options })
+      getAll() { return cookieStore.getAll() },
+      setAll(list) {
+        list.forEach(({ name, value, options }) => {
+          cookieStore.set(name, value, options)
+          response.cookies.set(name, value, options)
+        })
       },
     },
   })
@@ -46,9 +36,7 @@ export async function GET(request: NextRequest) {
   const { error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error) {
-    return NextResponse.redirect(
-      `${origin}/?auth_error=${encodeURIComponent(error.message)}`
-    )
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
   }
 
   return response

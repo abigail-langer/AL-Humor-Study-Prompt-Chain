@@ -2,17 +2,16 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export function createSupabaseServerClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   const cookieStore = cookies()
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  return createServerClient(url, key, {
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value
+      getAll() {
+        return cookieStore.getAll()
       },
-      set() {},
-      remove() {},
+      setAll() {}, // read-only in API routes
     },
   })
 }
