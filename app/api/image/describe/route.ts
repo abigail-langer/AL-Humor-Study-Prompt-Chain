@@ -48,10 +48,28 @@ async function postUpstream(
 }
 
 function extractDescription(data: unknown): string | null {
-  if (typeof data === 'string') return data
+  if (typeof data === 'string' && data.trim().length > 0) return data
+
+  // generate-captions returns an array of caption records;
+  // the image description lives at record.image.image_description
+  if (Array.isArray(data) && data.length > 0) {
+    for (const item of data) {
+      const desc = extractDescription(item)
+      if (desc) return desc
+    }
+  }
 
   if (data && typeof data === 'object') {
     const record = data as Record<string, unknown>
+
+    // Nested image object from caption records
+    if (record.image && typeof record.image === 'object') {
+      const img = record.image as Record<string, unknown>
+      if (typeof img.image_description === 'string' && img.image_description.trim().length > 0) {
+        return img.image_description
+      }
+    }
+
     for (const value of [
       record.description,
       record.imageDescription,
@@ -153,37 +171,40 @@ export async function POST(request: Request) {
       )
     }
 
-    const describePaths = [
-      '/pipeline/generate-image-description',
-      '/pipeline/describe-image',
-      '/pipeline/generate-description'
-    ]
+    const captions = await postUpstream(
+      '/pipeline/generate-captions',
+      { imageId },
+      token
+    )
 
-    const tried: Array<{ path: string; status: number }> = []
-
-    for (const path of describePaths) {
-      for (const payload of [{ imageId }, { image_id: imageId }]) {
-        const describe = await postUpstream(path, payload, token)
-        tried.push({ path, status: describe.status })
-
-        if (!describe.ok) continue
-
-        const description = extractDescription(describe.data)
-
-        if (description) {
-          return NextResponse.json({ imageId, cdnUrl, description })
-        }
-      }
+    if (!captions.ok) {
+      return NextResponse.json(
+        { error: 'Failed to generate image description', upstream: captions.data },
+        { status: captions.status || 502 }
+      )
     }
 
-    return NextResponse.json(
-      {
-        error:
-          'Could not extract image description from upstream response. Set IMAGE_DESCRIBE_PATH to your exact endpoint.',
-        tried
-      },
-      { status: 502 }
-    )
+    // The pipeline stores the image description in the images table.
+    // Fetch it directly from Supabase now that the pipeline has run.
+    const { data: imageRecord, error: dbError } = await supabase
+      .from('images')
+      .select('image_description')
+      .eq('id', imageId)
+      .single()
+
+    const description = imageRecord?.image_description
+
+    if (!description) {
+      return NextResponse.json(
+        {
+          error: 'Image description not found after pipeline ran.',
+          dbError: dbError?.message ?? null
+        },
+        { status: 502 }
+      )
+    }
+
+    return NextResponse.json({ imageId, cdnUrl, description })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({ error: message }, { status: 500 })
