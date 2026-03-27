@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -196,6 +197,7 @@ export default function FlavorBuilder() {
   const [savingStep, setSavingStep] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
   const [deletingStepId, setDeletingStepId] = useState<string | null>(null)
+  const [reorderingStepId, setReorderingStepId] = useState<string | null>(null)
 
   const loadFlavors = useCallback(async () => {
     setLoadingList(true)
@@ -358,6 +360,34 @@ export default function FlavorBuilder() {
       setStepError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setSavingStep(false)
+    }
+  }
+
+  const handleReorderStep = async (stepId: string, direction: 'up' | 'down') => {
+    if (!flavor) return
+    const idx = steps.findIndex(s => s.id === stepId)
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= steps.length) return
+
+    const stepA = steps[idx]
+    const stepB = steps[swapIdx]
+    setReorderingStepId(stepId)
+    try {
+      await Promise.all([
+        fetch(`/api/humor-flavors/${flavor.id}/steps/${stepA.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_by: stepB.order_by }),
+        }),
+        fetch(`/api/humor-flavors/${flavor.id}/steps/${stepB.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_by: stepA.order_by }),
+        }),
+      ])
+      await loadSteps(flavor.id)
+    } finally {
+      setReorderingStepId(null)
     }
   }
 
@@ -524,7 +554,7 @@ export default function FlavorBuilder() {
                 {steps.map((step, idx) => {
                   if (editingStepId === step.id) {
                     return (
-                      <div key={step.id}>
+                      <motion.div key={step.id} layout transition={{ type: 'spring', stiffness: 400, damping: 35 }}>
                         <div className="mb-2 flex items-center gap-2">
                           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
                             {idx + 1}
@@ -536,15 +566,34 @@ export default function FlavorBuilder() {
                           onSave={handleSaveStep} onCancel={() => setEditingStepId(null)}
                           saving={savingStep} error={stepError}
                           stepOptions={stepOptions} saveLabel="Save Step" />
-                      </div>
+                      </motion.div>
                     )
                   }
+                  const isReordering = reorderingStepId === step.id
                   return (
-                    <div key={step.id}
+                    <motion.div key={step.id} layout transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                       className="flex items-start justify-between rounded-xl border border-violet-100 bg-white p-4 shadow-sm">
                       <div className="flex items-start gap-3">
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
-                          {idx + 1}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <button
+                            onClick={() => handleReorderStep(step.id, 'up')}
+                            disabled={idx === 0 || isReordering || !!editingStepId}
+                            className="flex h-5 w-5 items-center justify-center rounded text-violet-300 hover:text-violet-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                            title="Move up"
+                          >
+                            ▲
+                          </button>
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
+                            {idx + 1}
+                          </div>
+                          <button
+                            onClick={() => handleReorderStep(step.id, 'down')}
+                            disabled={idx === steps.length - 1 || isReordering || !!editingStepId}
+                            className="flex h-5 w-5 items-center justify-center rounded text-violet-300 hover:text-violet-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                            title="Move down"
+                          >
+                            ▼
+                          </button>
                         </div>
                         <div>
                           <span className="text-sm font-semibold text-violet-900">Step {idx + 1}</span>
@@ -554,14 +603,14 @@ export default function FlavorBuilder() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-3 pl-4">
-                        <button onClick={() => openEditStep(step)}
-                          className="text-xs text-violet-400 hover:text-violet-700 transition-colors">Edit</button>
-                        <button onClick={() => handleDeleteStep(step.id)} disabled={deletingStepId === step.id}
+                        <button onClick={() => openEditStep(step)} disabled={isReordering}
+                          className="text-xs text-violet-400 hover:text-violet-700 disabled:opacity-40 transition-colors">Edit</button>
+                        <button onClick={() => handleDeleteStep(step.id)} disabled={deletingStepId === step.id || isReordering}
                           className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors">
                           {deletingStepId === step.id ? 'Deleting…' : 'Delete'}
                         </button>
                       </div>
-                    </div>
+                    </motion.div>
                   )
                 })}
 
