@@ -52,6 +52,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_superadmin, is_matrix_admin')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.is_superadmin && !profile?.is_matrix_admin) {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = '/login'
+    loginUrl.searchParams.set('error', 'unauthorized')
+    return NextResponse.redirect(loginUrl)
+  }
+
   response.headers.set('x-pathname', pathname)
   return response
 }
