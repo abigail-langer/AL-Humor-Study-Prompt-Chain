@@ -22,7 +22,7 @@ type FlavorStep = {
 
 type FlavorWithSteps = HumorFlavor & { steps: FlavorStep[] }
 
-type LookupItem = { id: number; name?: string; description?: string; slug?: string }
+type LookupItem = { id: number; name?: string; description?: string; slug?: string; is_temperature_supported?: boolean }
 
 type StepOptions = {
   inputTypes: LookupItem[]
@@ -31,10 +31,19 @@ type StepOptions = {
   models: LookupItem[]
 }
 
-// Default IDs based on lookup data
-const DEFAULT_MODEL_ID = 1          // GPT-4.1
-const DEFAULT_OUTPUT_TYPE_ID = 1    // string
-const DEFAULT_STEP_TYPE_ID = 3      // general
+const DEFAULT_MODEL_ID = 1        // GPT-4.1
+const DEFAULT_OUTPUT_TYPE_ID = 1  // string
+const STEP1_STEP_TYPE_ID = 2      // image-description (locked for step 1)
+const DEFAULT_STEP_TYPE_ID = 3    // general
+const INPUT_IMAGE_AND_TEXT = 1
+const INPUT_TEXT_ONLY = 2
+
+function slugify(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
 
 function defaultStep(orderBy: number): FlavorStep {
   return {
@@ -42,9 +51,9 @@ function defaultStep(orderBy: number): FlavorStep {
     llm_system_prompt: '',
     llm_user_prompt: '',
     llm_model_id: DEFAULT_MODEL_ID,
-    llm_input_type_id: orderBy === 1 ? 1 : 2, // image-and-text for step 1, text-only after
+    llm_input_type_id: orderBy === 1 ? INPUT_IMAGE_AND_TEXT : INPUT_TEXT_ONLY,
     llm_output_type_id: DEFAULT_OUTPUT_TYPE_ID,
-    humor_flavor_step_type_id: DEFAULT_STEP_TYPE_ID,
+    humor_flavor_step_type_id: orderBy === 1 ? STEP1_STEP_TYPE_ID : DEFAULT_STEP_TYPE_ID,
     llm_temperature: null,
   }
 }
@@ -68,7 +77,8 @@ export default function FlavorBuilder() {
     models: [],
   })
 
-  // Form state
+  // Form state — name is UI-only; slug is derived and saved to DB
+  const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [description, setDescription] = useState('')
   const [steps, setSteps] = useState<FlavorStep[]>(EMPTY_STEPS)
@@ -106,6 +116,7 @@ export default function FlavorBuilder() {
   const openCreate = () => {
     setSelected(null)
     setCreating(true)
+    setName('')
     setSlug('')
     setDescription('')
     setSteps(EMPTY_STEPS.map(s => ({ ...s })))
@@ -121,6 +132,7 @@ export default function FlavorBuilder() {
     const data: FlavorWithSteps = await res.json()
     setSelected(data)
     setCreating(false)
+    setName('')   // no name stored in DB; user can re-enter if they want to rename
     setSlug(data.slug)
     setDescription(data.description ?? '')
     const merged = [1, 2, 3].map(orderBy => {
@@ -131,15 +143,20 @@ export default function FlavorBuilder() {
           llm_system_prompt: existing.llm_system_prompt ?? '',
           llm_user_prompt: existing.llm_user_prompt ?? '',
           llm_model_id: existing.llm_model_id ?? DEFAULT_MODEL_ID,
-          llm_input_type_id: existing.llm_input_type_id ?? (orderBy === 1 ? 1 : 2),
+          llm_input_type_id: existing.llm_input_type_id ?? (orderBy === 1 ? INPUT_IMAGE_AND_TEXT : INPUT_TEXT_ONLY),
           llm_output_type_id: existing.llm_output_type_id ?? DEFAULT_OUTPUT_TYPE_ID,
-          humor_flavor_step_type_id: existing.humor_flavor_step_type_id ?? DEFAULT_STEP_TYPE_ID,
+          humor_flavor_step_type_id: existing.humor_flavor_step_type_id ?? (orderBy === 1 ? STEP1_STEP_TYPE_ID : DEFAULT_STEP_TYPE_ID),
           llm_temperature: existing.llm_temperature ?? null,
         }
       }
       return defaultStep(orderBy)
     })
     setSteps(merged)
+  }
+
+  const handleNameChange = (value: string) => {
+    setName(value)
+    setSlug(slugify(value))
   }
 
   const updateStep = (index: number, patch: Partial<FlavorStep>) => {
@@ -164,10 +181,11 @@ export default function FlavorBuilder() {
         if (!res.ok) throw new Error(data.error ?? 'Failed to create flavor')
         flavorId = data.id
       } else {
+        const savedSlug = name ? slug : selected!.slug
         const res = await fetch(`/api/humor-flavors/${selected!.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slug, description }),
+          body: JSON.stringify({ slug: savedSlug, description }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Failed to update flavor')
@@ -215,8 +233,8 @@ export default function FlavorBuilder() {
   }
 
   const isEditing = creating || !!selected
-  const selectedModel = (idx: number) =>
-    stepOptions.models.find(m => m.id === steps[idx]?.llm_model_id)
+  const displaySlug = creating ? slug : selected?.slug ?? ''
+  const canSave = creating ? (!!name && !!slug) : true
 
   return (
     <div className="flex h-full min-h-0 gap-0">
@@ -269,7 +287,7 @@ export default function FlavorBuilder() {
           <div className="mx-auto max-w-2xl">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900">
-                {creating ? 'New Humor Flavor' : slug}
+                {creating ? 'New Humor Flavor' : selected?.slug}
               </h2>
               {!creating && (
                 <button
@@ -287,14 +305,23 @@ export default function FlavorBuilder() {
               <h3 className="mb-4 text-sm font-semibold text-gray-700">Flavor Details</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">Slug</label>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Name {!creating && <span className="text-gray-400">(enter to rename)</span>}
+                  </label>
                   <input
                     type="text"
-                    value={slug}
-                    onChange={e => setSlug(e.target.value)}
-                    placeholder="e.g. dry-wit"
+                    value={name}
+                    onChange={e => handleNameChange(e.target.value)}
+                    placeholder={creating ? 'e.g. Dry Wit' : selected?.slug}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
                   />
+                </div>
+                {/* Slug — read-only, auto-generated */}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Slug (auto-generated)</label>
+                  <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                    {displaySlug || <span className="italic text-gray-300">will appear here</span>}
+                  </div>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-500">Description</label>
@@ -313,21 +340,26 @@ export default function FlavorBuilder() {
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-gray-700">Prompt Steps (executed in order)</h3>
               {steps.map((step, idx) => {
-                const model = selectedModel(idx)
-                const supportsTemp = model
-                  ? (stepOptions.models.find(m => m.id === step.llm_model_id) as { is_temperature_supported?: boolean } | undefined)?.is_temperature_supported ?? true
-                  : true
+                const isStep1 = idx === 0
+                const supportsTemp = (stepOptions.models.find(m => m.id === step.llm_model_id) as LookupItem | undefined)?.is_temperature_supported ?? true
 
                 return (
                   <div
                     key={step.order_by}
-                    className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+                    className={`rounded-xl border bg-white p-5 shadow-sm ${isStep1 ? 'border-blue-200' : 'border-gray-200'}`}
                   >
                     <div className="mb-4 flex items-center gap-3">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-bold text-white">
+                      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${isStep1 ? 'bg-blue-600' : 'bg-gray-900'}`}>
                         {idx + 1}
                       </div>
-                      <span className="text-sm font-semibold text-gray-800">Step {idx + 1}</span>
+                      <div>
+                        <span className="text-sm font-semibold text-gray-800">Step {idx + 1}</span>
+                        {isStep1 && (
+                          <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                            Image Description
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Config row */}
@@ -346,15 +378,21 @@ export default function FlavorBuilder() {
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-gray-500">Input Type</label>
-                        <select
-                          value={step.llm_input_type_id}
-                          onChange={e => updateStep(idx, { llm_input_type_id: Number(e.target.value) })}
-                          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-black focus:outline-none"
-                        >
-                          {stepOptions.inputTypes.map(t => (
-                            <option key={t.id} value={t.id}>{labelFor(t)}</option>
-                          ))}
-                        </select>
+                        {isStep1 ? (
+                          <div className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-500">
+                            Image &amp; Text
+                          </div>
+                        ) : (
+                          <select
+                            value={step.llm_input_type_id}
+                            onChange={e => updateStep(idx, { llm_input_type_id: Number(e.target.value) })}
+                            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-black focus:outline-none"
+                          >
+                            {stepOptions.inputTypes.map(t => (
+                              <option key={t.id} value={t.id}>{labelFor(t)}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-gray-500">Output Type</label>
@@ -370,15 +408,21 @@ export default function FlavorBuilder() {
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-gray-500">Step Type</label>
-                        <select
-                          value={step.humor_flavor_step_type_id}
-                          onChange={e => updateStep(idx, { humor_flavor_step_type_id: Number(e.target.value) })}
-                          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-black focus:outline-none"
-                        >
-                          {stepOptions.stepTypes.map(t => (
-                            <option key={t.id} value={t.id}>{labelFor(t)}</option>
-                          ))}
-                        </select>
+                        {isStep1 ? (
+                          <div className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-500">
+                            Image Description
+                          </div>
+                        ) : (
+                          <select
+                            value={step.humor_flavor_step_type_id}
+                            onChange={e => updateStep(idx, { humor_flavor_step_type_id: Number(e.target.value) })}
+                            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-black focus:outline-none"
+                          >
+                            {stepOptions.stepTypes.map(t => (
+                              <option key={t.id} value={t.id}>{labelFor(t)}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                     </div>
 
@@ -408,7 +452,7 @@ export default function FlavorBuilder() {
                         <textarea
                           value={step.llm_system_prompt}
                           onChange={e => updateStep(idx, { llm_system_prompt: e.target.value })}
-                          placeholder="You are a…"
+                          placeholder={isStep1 ? 'You are an expert image analyst…' : 'You are a…'}
                           rows={3}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
                         />
@@ -418,7 +462,7 @@ export default function FlavorBuilder() {
                         <textarea
                           value={step.llm_user_prompt}
                           onChange={e => updateStep(idx, { llm_user_prompt: e.target.value })}
-                          placeholder="Given the image, generate…"
+                          placeholder={isStep1 ? 'Describe this image in thorough detail…' : 'Given the image description, generate…'}
                           rows={3}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
                         />
@@ -433,7 +477,7 @@ export default function FlavorBuilder() {
             <div className="mt-6 flex items-center gap-3">
               <button
                 onClick={handleSave}
-                disabled={saving || !slug}
+                disabled={saving || !canSave}
                 className="rounded-lg bg-black px-6 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving ? 'Saving…' : 'Save Flavor'}
