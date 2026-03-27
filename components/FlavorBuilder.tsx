@@ -14,21 +14,59 @@ type FlavorStep = {
   order_by: number
   llm_system_prompt: string
   llm_user_prompt: string
+  llm_model_id: number
+  llm_input_type_id: number
+  llm_output_type_id: number
+  humor_flavor_step_type_id: number
+  llm_temperature: number | null
 }
 
 type FlavorWithSteps = HumorFlavor & { steps: FlavorStep[] }
 
-const EMPTY_STEPS: FlavorStep[] = [
-  { order_by: 1, llm_system_prompt: '', llm_user_prompt: '' },
-  { order_by: 2, llm_system_prompt: '', llm_user_prompt: '' },
-  { order_by: 3, llm_system_prompt: '', llm_user_prompt: '' },
-]
+type LookupItem = { id: number; name?: string; description?: string; slug?: string }
+
+type StepOptions = {
+  inputTypes: LookupItem[]
+  outputTypes: LookupItem[]
+  stepTypes: LookupItem[]
+  models: LookupItem[]
+}
+
+// Default IDs based on lookup data
+const DEFAULT_MODEL_ID = 1          // GPT-4.1
+const DEFAULT_OUTPUT_TYPE_ID = 1    // string
+const DEFAULT_STEP_TYPE_ID = 3      // general
+
+function defaultStep(orderBy: number): FlavorStep {
+  return {
+    order_by: orderBy,
+    llm_system_prompt: '',
+    llm_user_prompt: '',
+    llm_model_id: DEFAULT_MODEL_ID,
+    llm_input_type_id: orderBy === 1 ? 1 : 2, // image-and-text for step 1, text-only after
+    llm_output_type_id: DEFAULT_OUTPUT_TYPE_ID,
+    humor_flavor_step_type_id: DEFAULT_STEP_TYPE_ID,
+    llm_temperature: null,
+  }
+}
+
+const EMPTY_STEPS: FlavorStep[] = [defaultStep(1), defaultStep(2), defaultStep(3)]
+
+function labelFor(item: LookupItem) {
+  return item.name ?? item.description ?? item.slug ?? String(item.id)
+}
 
 export default function FlavorBuilder() {
   const [flavors, setFlavors] = useState<HumorFlavor[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [selected, setSelected] = useState<FlavorWithSteps | null>(null)
   const [creating, setCreating] = useState(false)
+  const [stepOptions, setStepOptions] = useState<StepOptions>({
+    inputTypes: [],
+    outputTypes: [],
+    stepTypes: [],
+    models: [],
+  })
 
   // Form state
   const [slug, setSlug] = useState('')
@@ -43,10 +81,7 @@ export default function FlavorBuilder() {
     setLoadingList(true)
     try {
       const res = await fetch('/api/humor-flavors')
-      if (res.ok) {
-        const data = await res.json()
-        setFlavors(data)
-      }
+      if (res.ok) setFlavors(await res.json())
     } finally {
       setLoadingList(false)
     }
@@ -54,6 +89,10 @@ export default function FlavorBuilder() {
 
   useEffect(() => {
     loadFlavors()
+    fetch('/api/step-options')
+      .then(r => r.json())
+      .then((data: StepOptions) => setStepOptions(data))
+      .catch(() => {})
   }, [loadFlavors])
 
   const openCreate = () => {
@@ -76,18 +115,27 @@ export default function FlavorBuilder() {
     setCreating(false)
     setSlug(data.slug)
     setDescription(data.description ?? '')
-    // Merge fetched steps with empty template (always show 3)
-    const merged = EMPTY_STEPS.map(template => {
-      const existing = data.steps.find(s => s.order_by === template.order_by)
-      return existing
-        ? { order_by: template.order_by, llm_system_prompt: existing.llm_system_prompt ?? '', llm_user_prompt: existing.llm_user_prompt ?? '' }
-        : { ...template }
+    const merged = [1, 2, 3].map(orderBy => {
+      const existing = data.steps.find(s => s.order_by === orderBy)
+      if (existing) {
+        return {
+          order_by: orderBy,
+          llm_system_prompt: existing.llm_system_prompt ?? '',
+          llm_user_prompt: existing.llm_user_prompt ?? '',
+          llm_model_id: existing.llm_model_id ?? DEFAULT_MODEL_ID,
+          llm_input_type_id: existing.llm_input_type_id ?? (orderBy === 1 ? 1 : 2),
+          llm_output_type_id: existing.llm_output_type_id ?? DEFAULT_OUTPUT_TYPE_ID,
+          humor_flavor_step_type_id: existing.humor_flavor_step_type_id ?? DEFAULT_STEP_TYPE_ID,
+          llm_temperature: existing.llm_temperature ?? null,
+        }
+      }
+      return defaultStep(orderBy)
     })
     setSteps(merged)
   }
 
-  const updateStep = (index: number, field: 'llm_system_prompt' | 'llm_user_prompt', value: string) => {
-    setSteps(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s))
+  const updateStep = (index: number, patch: Partial<FlavorStep>) => {
+    setSteps(prev => prev.map((s, i) => i === index ? { ...s, ...patch } : s))
   }
 
   const handleSave = async () => {
@@ -118,7 +166,6 @@ export default function FlavorBuilder() {
         flavorId = selected!.id
       }
 
-      // Save steps
       const stepsRes = await fetch(`/api/humor-flavors/${flavorId}/steps`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -129,7 +176,6 @@ export default function FlavorBuilder() {
 
       setSaveSuccess(true)
       await loadFlavors()
-
       if (creating) {
         setCreating(false)
         await openFlavor(flavorId)
@@ -161,6 +207,8 @@ export default function FlavorBuilder() {
   }
 
   const isEditing = creating || !!selected
+  const selectedModel = (idx: number) =>
+    stepOptions.models.find(m => m.id === steps[idx]?.llm_model_id)
 
   return (
     <div className="flex h-full min-h-0 gap-0">
@@ -254,45 +302,121 @@ export default function FlavorBuilder() {
             {/* Steps */}
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-gray-700">Prompt Steps (executed in order)</h3>
-              {steps.map((step, idx) => (
-                <div
-                  key={step.order_by}
-                  className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-                >
-                  <div className="mb-4 flex items-center gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-bold text-white">
-                      {idx + 1}
+              {steps.map((step, idx) => {
+                const model = selectedModel(idx)
+                const supportsTemp = model
+                  ? (stepOptions.models.find(m => m.id === step.llm_model_id) as { is_temperature_supported?: boolean } | undefined)?.is_temperature_supported ?? true
+                  : true
+
+                return (
+                  <div
+                    key={step.order_by}
+                    className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+                  >
+                    <div className="mb-4 flex items-center gap-3">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-bold text-white">
+                        {idx + 1}
+                      </div>
+                      <span className="text-sm font-semibold text-gray-800">Step {idx + 1}</span>
                     </div>
-                    <span className="text-sm font-semibold text-gray-800">Step {idx + 1}</span>
+
+                    {/* Config row */}
+                    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">Model</label>
+                        <select
+                          value={step.llm_model_id}
+                          onChange={e => updateStep(idx, { llm_model_id: Number(e.target.value) })}
+                          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-black focus:outline-none"
+                        >
+                          {stepOptions.models.map(m => (
+                            <option key={m.id} value={m.id}>{labelFor(m)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">Input Type</label>
+                        <select
+                          value={step.llm_input_type_id}
+                          onChange={e => updateStep(idx, { llm_input_type_id: Number(e.target.value) })}
+                          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-black focus:outline-none"
+                        >
+                          {stepOptions.inputTypes.map(t => (
+                            <option key={t.id} value={t.id}>{labelFor(t)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">Output Type</label>
+                        <select
+                          value={step.llm_output_type_id}
+                          onChange={e => updateStep(idx, { llm_output_type_id: Number(e.target.value) })}
+                          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-black focus:outline-none"
+                        >
+                          {stepOptions.outputTypes.map(t => (
+                            <option key={t.id} value={t.id}>{labelFor(t)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">Step Type</label>
+                        <select
+                          value={step.humor_flavor_step_type_id}
+                          onChange={e => updateStep(idx, { humor_flavor_step_type_id: Number(e.target.value) })}
+                          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-black focus:outline-none"
+                        >
+                          {stepOptions.stepTypes.map(t => (
+                            <option key={t.id} value={t.id}>{labelFor(t)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {supportsTemp && (
+                      <div className="mb-4">
+                        <label className="mb-1 block text-xs font-medium text-gray-500">
+                          Temperature <span className="text-gray-400">(0–2, leave blank for default)</span>
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={2}
+                          step={0.1}
+                          value={step.llm_temperature ?? ''}
+                          onChange={e => updateStep(idx, {
+                            llm_temperature: e.target.value === '' ? null : Number(e.target.value),
+                          })}
+                          placeholder="e.g. 1.0"
+                          className="w-32 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">System Prompt</label>
+                        <textarea
+                          value={step.llm_system_prompt}
+                          onChange={e => updateStep(idx, { llm_system_prompt: e.target.value })}
+                          placeholder="You are a…"
+                          rows={3}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">User Prompt</label>
+                        <textarea
+                          value={step.llm_user_prompt}
+                          onChange={e => updateStep(idx, { llm_user_prompt: e.target.value })}
+                          placeholder="Given the image, generate…"
+                          rows={3}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-gray-500">
-                        System Prompt
-                      </label>
-                      <textarea
-                        value={step.llm_system_prompt}
-                        onChange={e => updateStep(idx, 'llm_system_prompt', e.target.value)}
-                        placeholder="You are a…"
-                        rows={3}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-gray-500">
-                        User Prompt
-                      </label>
-                      <textarea
-                        value={step.llm_user_prompt}
-                        onChange={e => updateStep(idx, 'llm_user_prompt', e.target.value)}
-                        placeholder="Given the image, generate…"
-                        rows={3}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Save */}
@@ -304,12 +428,8 @@ export default function FlavorBuilder() {
               >
                 {saving ? 'Saving…' : 'Save Flavor'}
               </button>
-              {saveSuccess && (
-                <span className="text-sm text-green-600">Saved successfully!</span>
-              )}
-              {saveError && (
-                <span className="text-sm text-red-600">{saveError}</span>
-              )}
+              {saveSuccess && <span className="text-sm text-green-600">Saved successfully!</span>}
+              {saveError && <span className="text-sm text-red-600">{saveError}</span>}
             </div>
           </div>
         )}

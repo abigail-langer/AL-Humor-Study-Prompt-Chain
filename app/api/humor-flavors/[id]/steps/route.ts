@@ -5,6 +5,11 @@ type StepInput = {
   order_by: number
   llm_system_prompt: string
   llm_user_prompt: string
+  llm_model_id: number
+  llm_input_type_id: number
+  llm_output_type_id: number
+  humor_flavor_step_type_id: number
+  llm_temperature: number | null
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
@@ -36,6 +41,11 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     order_by: s.order_by,
     llm_system_prompt: s.llm_system_prompt,
     llm_user_prompt: s.llm_user_prompt,
+    llm_model_id: s.llm_model_id,
+    llm_input_type_id: s.llm_input_type_id,
+    llm_output_type_id: s.llm_output_type_id,
+    humor_flavor_step_type_id: s.humor_flavor_step_type_id,
+    llm_temperature: s.llm_temperature,
   }))
 
   const { data, error } = await supabase
