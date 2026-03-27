@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import CaptionViewerModal from '@/components/CaptionViewerModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -171,9 +172,12 @@ function StepForm({
 // ── Main component ────────────────────────────────────────────────────────────
 
 type View = 'list' | 'edit'
+type EditorTab = 'steps' | 'captions'
 
 export default function FlavorBuilder() {
   const [view, setView] = useState<View>('list')
+  const [editorTab, setEditorTab] = useState<EditorTab>('steps')
+  const [captionModalOpen, setCaptionModalOpen] = useState(false)
   const [flavors, setFlavors] = useState<HumorFlavor[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
@@ -237,6 +241,7 @@ export default function FlavorBuilder() {
     setDescription('')
     setFlavorError(null)
     setEditingStepId(null)
+    setEditorTab('steps')
     setView('edit')
   }
 
@@ -247,6 +252,7 @@ export default function FlavorBuilder() {
     setDescription(f.description ?? '')
     setFlavorError(null)
     setEditingStepId(null)
+    setEditorTab('steps')
     await loadSteps(f.id)
     setView('edit')
   }
@@ -525,8 +531,34 @@ export default function FlavorBuilder() {
             </div>
           </div>
 
-          {/* Steps — only shown once flavor exists */}
+          {/* Tab bar — only shown once flavor exists */}
           {!isCreating && (
+            <div className="flex gap-1 rounded-xl border border-violet-100 bg-white p-1 shadow-sm">
+              <button
+                onClick={() => setEditorTab('steps')}
+                className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+                  editorTab === 'steps'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-violet-500 hover:bg-violet-50 hover:text-violet-800'
+                }`}
+              >
+                Prompt Steps{steps.length > 0 ? ` (${steps.length})` : ''}
+              </button>
+              <button
+                onClick={() => setEditorTab('captions')}
+                className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+                  editorTab === 'captions'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-violet-500 hover:bg-violet-50 hover:text-violet-800'
+                }`}
+              >
+                Captions
+              </button>
+            </div>
+          )}
+
+          {/* Steps — only shown once flavor exists and steps tab is active */}
+          {!isCreating && editorTab === 'steps' && (
             <div>
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-violet-700">
@@ -633,8 +665,38 @@ export default function FlavorBuilder() {
             </div>
           )}
 
+          {/* Captions tab — only shown once flavor exists and captions tab is active */}
+          {!isCreating && editorTab === 'captions' && (
+            <div className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm">
+              <h3 className="mb-2 text-sm font-semibold text-violet-700">Captions Preview</h3>
+              <p className="mb-5 text-xs text-violet-500">
+                View the caption and image pairs that have been generated using the{' '}
+                <span className="font-mono font-medium text-violet-700">{flavor?.slug}</span> humor flavor.
+              </p>
+              <button
+                onClick={() => setCaptionModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-700"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M4 6h16M4 10h16M4 14h10" />
+                </svg>
+                View Captions
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
+
+      {/* Caption viewer modal */}
+      {captionModalOpen && flavor && (
+        <CaptionViewerModal
+          flavorId={String(flavor.id)}
+          flavorSlug={flavor.slug}
+          onClose={() => setCaptionModalOpen(false)}
+        />
+      )}
     </div>
   )
 }
