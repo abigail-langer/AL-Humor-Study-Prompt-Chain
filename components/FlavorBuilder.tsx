@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import CaptionViewer from '@/components/CaptionViewer'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -171,9 +172,11 @@ function StepForm({
 // ── Main component ────────────────────────────────────────────────────────────
 
 type View = 'list' | 'edit'
+type EditorTab = 'steps' | 'captions'
 
 export default function FlavorBuilder() {
   const [view, setView] = useState<View>('list')
+  const [editorTab, setEditorTab] = useState<EditorTab>('steps')
   const [flavors, setFlavors] = useState<HumorFlavor[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
@@ -237,6 +240,7 @@ export default function FlavorBuilder() {
     setDescription('')
     setFlavorError(null)
     setEditingStepId(null)
+    setEditorTab('steps')
     setView('edit')
   }
 
@@ -247,6 +251,7 @@ export default function FlavorBuilder() {
     setDescription(f.description ?? '')
     setFlavorError(null)
     setEditingStepId(null)
+    setEditorTab('steps')
     await loadSteps(f.id)
     setView('edit')
   }
@@ -525,8 +530,34 @@ export default function FlavorBuilder() {
             </div>
           </div>
 
-          {/* Steps — only shown once flavor exists */}
+          {/* Tab bar — only shown once flavor exists */}
           {!isCreating && (
+            <div className="flex gap-1 rounded-xl border border-violet-100 bg-white p-1 shadow-sm">
+              <button
+                onClick={() => setEditorTab('steps')}
+                className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+                  editorTab === 'steps'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-violet-500 hover:bg-violet-50 hover:text-violet-800'
+                }`}
+              >
+                Prompt Steps{steps.length > 0 ? ` (${steps.length})` : ''}
+              </button>
+              <button
+                onClick={() => setEditorTab('captions')}
+                className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+                  editorTab === 'captions'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-violet-500 hover:bg-violet-50 hover:text-violet-800'
+                }`}
+              >
+                Captions
+              </button>
+            </div>
+          )}
+
+          {/* Steps — only shown once flavor exists and steps tab is active */}
+          {!isCreating && editorTab === 'steps' && (
             <div>
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-violet-700">
@@ -633,8 +664,14 @@ export default function FlavorBuilder() {
             </div>
           )}
 
+          {/* Captions tab — only shown once flavor exists and captions tab is active */}
+          {!isCreating && editorTab === 'captions' && flavor && (
+            <CaptionViewer flavorId={String(flavor.id)} />
+          )}
+
         </div>
       </div>
+
     </div>
   )
 }
