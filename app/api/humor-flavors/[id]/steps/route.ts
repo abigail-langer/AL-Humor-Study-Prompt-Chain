@@ -12,6 +12,33 @@ type StepInput = {
   llm_temperature: number | null
 }
 
+export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const supabase = createSupabaseServerClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body: StepInput = await request.json()
+
+  const { data, error } = await supabase
+    .from('humor_flavor_steps')
+    .insert({
+      humor_flavor_id: params.id,
+      order_by: body.order_by,
+      llm_system_prompt: body.llm_system_prompt,
+      llm_user_prompt: body.llm_user_prompt,
+      llm_model_id: body.llm_model_id,
+      llm_input_type_id: body.llm_input_type_id,
+      llm_output_type_id: body.llm_output_type_id,
+      humor_flavor_step_type_id: body.humor_flavor_step_type_id,
+      llm_temperature: body.llm_temperature,
+    })
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data, { status: 201 })
+}
+
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   const supabase = createSupabaseServerClient()
   const { data: { session } } = await supabase.auth.getSession()
