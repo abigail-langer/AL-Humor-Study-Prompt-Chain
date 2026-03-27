@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import CaptionViewerModal from '@/components/CaptionViewerModal'
+import CaptionViewer from '@/components/CaptionViewer'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -177,7 +177,6 @@ type EditorTab = 'steps' | 'captions'
 export default function FlavorBuilder() {
   const [view, setView] = useState<View>('list')
   const [editorTab, setEditorTab] = useState<EditorTab>('steps')
-  const [captionModalOpen, setCaptionModalOpen] = useState(false)
   const [flavors, setFlavors] = useState<HumorFlavor[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
@@ -666,37 +665,13 @@ export default function FlavorBuilder() {
           )}
 
           {/* Captions tab — only shown once flavor exists and captions tab is active */}
-          {!isCreating && editorTab === 'captions' && (
-            <div className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm">
-              <h3 className="mb-2 text-sm font-semibold text-violet-700">Captions Preview</h3>
-              <p className="mb-5 text-xs text-violet-500">
-                View the caption and image pairs that have been generated using the{' '}
-                <span className="font-mono font-medium text-violet-700">{flavor?.slug}</span> humor flavor.
-              </p>
-              <button
-                onClick={() => setCaptionModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-700"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round"
-                    d="M4 6h16M4 10h16M4 14h10" />
-                </svg>
-                View Captions
-              </button>
-            </div>
+          {!isCreating && editorTab === 'captions' && flavor && (
+            <CaptionViewer flavorId={String(flavor.id)} />
           )}
 
         </div>
       </div>
 
-      {/* Caption viewer modal */}
-      {captionModalOpen && flavor && (
-        <CaptionViewerModal
-          flavorId={String(flavor.id)}
-          flavorSlug={flavor.slug}
-          onClose={() => setCaptionModalOpen(false)}
-        />
-      )}
     </div>
   )
 }
