@@ -6,7 +6,6 @@ type HumorFlavor = {
   id: string
   slug: string
   description: string | null
-  created_at: string
 }
 
 type FlavorStep = {
@@ -59,6 +58,7 @@ function labelFor(item: LookupItem) {
 export default function FlavorBuilder() {
   const [flavors, setFlavors] = useState<HumorFlavor[]>([])
   const [loadingList, setLoadingList] = useState(true)
+  const [listError, setListError] = useState<string | null>(null)
   const [selected, setSelected] = useState<FlavorWithSteps | null>(null)
   const [creating, setCreating] = useState(false)
   const [stepOptions, setStepOptions] = useState<StepOptions>({
@@ -79,9 +79,17 @@ export default function FlavorBuilder() {
 
   const loadFlavors = useCallback(async () => {
     setLoadingList(true)
+    setListError(null)
     try {
       const res = await fetch('/api/humor-flavors')
-      if (res.ok) setFlavors(await res.json())
+      const data = await res.json()
+      if (res.ok) {
+        setFlavors(data)
+      } else {
+        setListError(data.error ?? 'Failed to load flavors')
+      }
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : 'Failed to load flavors')
     } finally {
       setLoadingList(false)
     }
@@ -225,6 +233,8 @@ export default function FlavorBuilder() {
         <div className="flex-1 overflow-y-auto">
           {loadingList ? (
             <div className="p-4 text-sm text-gray-400">Loading…</div>
+          ) : listError ? (
+            <div className="p-4 text-xs text-red-600">{listError}</div>
           ) : flavors.length === 0 ? (
             <div className="p-4 text-sm text-gray-400">No flavors yet. Create one!</div>
           ) : (
