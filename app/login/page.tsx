@@ -11,6 +11,8 @@ function LoginForm() {
   const errorMessage =
     error === 'auth_failed'
       ? 'Authentication failed. Please try again.'
+      : error === 'unauthorized'
+      ? 'Access denied. This tool requires admin privileges.'
       : null
 
   const handleGoogleSignIn = async () => {
