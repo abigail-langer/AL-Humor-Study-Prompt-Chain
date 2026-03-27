@@ -131,7 +131,22 @@ export async function POST(request: Request) {
       )
     }
 
-    // Step 4: Generate captions with humor flavor
+    // Step 4: Run standard caption pipeline first — this populates images.image_description,
+    // which the custom humor flavor steps depend on as their "step1Output".
+    const describe = await postUpstream(
+      '/pipeline/generate-captions',
+      { imageId },
+      token
+    )
+
+    if (!describe.ok) {
+      return NextResponse.json(
+        { error: 'Failed to generate image description', upstream: describe.data },
+        { status: describe.status || 502 }
+      )
+    }
+
+    // Step 5: Generate captions using the custom humor flavor
     const captions = await postUpstream(
       '/pipeline/generate-captions',
       { imageId, humorFlavorId },
