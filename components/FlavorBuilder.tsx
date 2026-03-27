@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -553,7 +554,7 @@ export default function FlavorBuilder() {
                 {steps.map((step, idx) => {
                   if (editingStepId === step.id) {
                     return (
-                      <div key={step.id}>
+                      <motion.div key={step.id} layout transition={{ type: 'spring', stiffness: 400, damping: 35 }}>
                         <div className="mb-2 flex items-center gap-2">
                           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
                             {idx + 1}
@@ -565,12 +566,12 @@ export default function FlavorBuilder() {
                           onSave={handleSaveStep} onCancel={() => setEditingStepId(null)}
                           saving={savingStep} error={stepError}
                           stepOptions={stepOptions} saveLabel="Save Step" />
-                      </div>
+                      </motion.div>
                     )
                   }
                   const isReordering = reorderingStepId === step.id
                   return (
-                    <div key={step.id}
+                    <motion.div key={step.id} layout transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                       className="flex items-start justify-between rounded-xl border border-violet-100 bg-white p-4 shadow-sm">
                       <div className="flex items-start gap-3">
                         <div className="flex flex-col items-center gap-0.5">
@@ -609,7 +610,7 @@ export default function FlavorBuilder() {
                           {deletingStepId === step.id ? 'Deleting…' : 'Delete'}
                         </button>
                       </div>
-                    </div>
+                    </motion.div>
                   )
                 })}
 
