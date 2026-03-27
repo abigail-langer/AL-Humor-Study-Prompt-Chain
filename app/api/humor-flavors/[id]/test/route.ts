@@ -22,7 +22,7 @@ async function postUpstream(path: string, payload: Record<string, unknown>, toke
 // POST /api/humor-flavors/[id]/test
 // Body: multipart/form-data with field "image"
 // Runs the full 4-step pipeline:
-//   1. Presign  2. Upload to S3  3. Register  4. Generate captions (×2)
+//   1. Presign  2. Upload to S3  3. Register  4. Generate captions (with flavor)
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
@@ -100,20 +100,7 @@ export async function POST(
     )
   }
 
-  // ── Step 4a: Generate captions (no flavor) — populates image_description ─
-  const captionsBase = await postUpstream(
-    '/pipeline/generate-captions',
-    { imageId },
-    token
-  )
-  if (!captionsBase.ok) {
-    return NextResponse.json(
-      { error: 'Failed to generate image description', upstream: captionsBase.data },
-      { status: captionsBase.status || 502 }
-    )
-  }
-
-  // ── Step 4b: Generate captions with the specific humor flavor ────────────
+  // ── Step 4: Generate captions with the specific humor flavor ─────────────
   // Send both camelCase and snake_case so the API accepts either convention
   const captionsFlavor = await postUpstream(
     '/pipeline/generate-captions',
@@ -122,7 +109,7 @@ export async function POST(
   )
   if (!captionsFlavor.ok) {
     return NextResponse.json(
-      { error: 'Failed to generate flavor captions', upstream: captionsFlavor.data },
+      { error: 'Failed to generate captions', upstream: captionsFlavor.data },
       { status: captionsFlavor.status || 502 }
     )
   }
