@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 
 type HumorFlavor = {
   id: string
-  name: string
   slug: string
 }
 
@@ -147,7 +146,7 @@ export default function TestingStation() {
           >
             {flavors.map(f => (
               <option key={f.id} value={f.id}>
-                {f.name} ({f.slug})
+                {f.slug}
               </option>
             ))}
           </select>

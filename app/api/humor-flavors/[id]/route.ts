@@ -31,11 +31,11 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, slug, description } = body
+  const { slug, description } = body
 
   const { data, error } = await supabase
     .from('humor_flavors')
-    .update({ name, slug, description })
+    .update({ slug, description })
     .eq('id', params.id)
     .select()
     .single()

@@ -21,15 +21,15 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, slug, description } = body
+  const { slug, description } = body
 
-  if (!name || !slug) {
-    return NextResponse.json({ error: 'name and slug are required' }, { status: 400 })
+  if (!slug) {
+    return NextResponse.json({ error: 'slug is required' }, { status: 400 })
   }
 
   const { data, error } = await supabase
     .from('humor_flavors')
-    .insert({ name, slug, description })
+    .insert({ slug, description })
     .select()
     .single()
 

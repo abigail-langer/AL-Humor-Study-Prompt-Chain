@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 
 type HumorFlavor = {
   id: string
-  name: string
   slug: string
   description: string | null
   created_at: string
@@ -25,13 +24,6 @@ const EMPTY_STEPS: FlavorStep[] = [
   { order_by: 3, llm_system_prompt: '', llm_user_prompt: '' },
 ]
 
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-}
-
 export default function FlavorBuilder() {
   const [flavors, setFlavors] = useState<HumorFlavor[]>([])
   const [loadingList, setLoadingList] = useState(true)
@@ -39,7 +31,6 @@ export default function FlavorBuilder() {
   const [creating, setCreating] = useState(false)
 
   // Form state
-  const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [description, setDescription] = useState('')
   const [steps, setSteps] = useState<FlavorStep[]>(EMPTY_STEPS)
@@ -68,7 +59,6 @@ export default function FlavorBuilder() {
   const openCreate = () => {
     setSelected(null)
     setCreating(true)
-    setName('')
     setSlug('')
     setDescription('')
     setSteps(EMPTY_STEPS.map(s => ({ ...s })))
@@ -84,7 +74,6 @@ export default function FlavorBuilder() {
     const data: FlavorWithSteps = await res.json()
     setSelected(data)
     setCreating(false)
-    setName(data.name)
     setSlug(data.slug)
     setDescription(data.description ?? '')
     // Merge fetched steps with empty template (always show 3)
@@ -95,11 +84,6 @@ export default function FlavorBuilder() {
         : { ...template }
     })
     setSteps(merged)
-  }
-
-  const handleNameChange = (value: string) => {
-    setName(value)
-    if (creating) setSlug(slugify(value))
   }
 
   const updateStep = (index: number, field: 'llm_system_prompt' | 'llm_user_prompt', value: string) => {
@@ -118,7 +102,7 @@ export default function FlavorBuilder() {
         const res = await fetch('/api/humor-flavors', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, slug, description }),
+          body: JSON.stringify({ slug, description }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Failed to create flavor')
@@ -127,7 +111,7 @@ export default function FlavorBuilder() {
         const res = await fetch(`/api/humor-flavors/${selected!.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, slug, description }),
+          body: JSON.stringify({ slug, description }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Failed to update flavor')
@@ -159,7 +143,7 @@ export default function FlavorBuilder() {
 
   const handleDelete = async () => {
     if (!selected) return
-    if (!confirm(`Delete "${selected.name}"? This cannot be undone.`)) return
+    if (!confirm(`Delete "${selected.slug}"? This cannot be undone.`)) return
     setDeleting(true)
     try {
       const res = await fetch(`/api/humor-flavors/${selected.id}`, { method: 'DELETE' })
@@ -205,8 +189,10 @@ export default function FlavorBuilder() {
                       selected?.id === f.id ? 'bg-white font-semibold text-gray-900' : 'text-gray-600'
                     }`}
                   >
-                    <div className="font-medium">{f.name}</div>
-                    <div className="mt-0.5 text-xs text-gray-400">{f.slug}</div>
+                    <div className="font-medium">{f.slug}</div>
+                    {f.description && (
+                      <div className="mt-0.5 truncate text-xs text-gray-400">{f.description}</div>
+                    )}
                   </button>
                 </li>
               ))}
@@ -225,7 +211,7 @@ export default function FlavorBuilder() {
           <div className="mx-auto max-w-2xl">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900">
-                {creating ? 'New Humor Flavor' : name}
+                {creating ? 'New Humor Flavor' : slug}
               </h2>
               {!creating && (
                 <button
@@ -242,16 +228,6 @@ export default function FlavorBuilder() {
             <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h3 className="mb-4 text-sm font-semibold text-gray-700">Flavor Details</h3>
               <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">Name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={e => handleNameChange(e.target.value)}
-                    placeholder="e.g. Dry Wit"
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                  />
-                </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-500">Slug</label>
                   <input
@@ -323,7 +299,7 @@ export default function FlavorBuilder() {
             <div className="mt-6 flex items-center gap-3">
               <button
                 onClick={handleSave}
-                disabled={saving || !name || !slug}
+                disabled={saving || !slug}
                 className="rounded-lg bg-black px-6 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving ? 'Saving…' : 'Save Flavor'}
