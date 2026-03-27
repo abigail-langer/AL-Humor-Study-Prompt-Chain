@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import CaptionViewer from '@/components/CaptionViewer'
+import FlavorTester from '@/components/FlavorTester'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -171,7 +172,7 @@ function StepForm({
 // ── Main component ────────────────────────────────────────────────────────────
 
 type View = 'list' | 'edit'
-type EditorTab = 'steps' | 'captions'
+type EditorTab = 'steps' | 'captions' | 'test'
 
 export default function FlavorBuilder() {
   const [view, setView] = useState<View>('list')
@@ -554,6 +555,16 @@ export default function FlavorBuilder() {
               >
                 Captions
               </button>
+              <button
+                onClick={() => setEditorTab('test')}
+                className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+                  editorTab === 'test'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-violet-500 hover:bg-violet-50 hover:text-violet-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
+                }`}
+              >
+                Test
+              </button>
             </div>
           )}
 
@@ -664,6 +675,17 @@ export default function FlavorBuilder() {
           {/* Captions tab */}
           {!isCreating && editorTab === 'captions' && flavor && (
             <CaptionViewer flavorId={String(flavor.id)} />
+          )}
+
+          {/* Test tab */}
+          {!isCreating && editorTab === 'test' && flavor && (
+            <div className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+              <h3 className="mb-1 text-sm font-semibold text-violet-900 dark:text-gray-100">Test this flavor</h3>
+              <p className="mb-4 text-xs text-violet-500 dark:text-gray-400">
+                Upload an image to generate captions using <span className="font-medium">{flavor.slug}</span>.
+              </p>
+              <FlavorTester flavorId={String(flavor.id)} />
+            </div>
           )}
 
         </div>
