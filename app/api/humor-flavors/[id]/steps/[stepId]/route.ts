@@ -14,6 +14,7 @@ export async function PATCH(
   const { data, error } = await supabase
     .from('humor_flavor_steps')
     .update({
+      ...(body.order_by !== undefined && { order_by: body.order_by }),
       llm_system_prompt: body.llm_system_prompt,
       llm_user_prompt: body.llm_user_prompt,
       llm_model_id: body.llm_model_id,
