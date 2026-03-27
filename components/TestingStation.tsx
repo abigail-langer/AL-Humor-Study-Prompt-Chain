@@ -77,7 +77,10 @@ export default function TestingStation() {
 
       const res = await fetch('/api/test-station/run', { method: 'POST', body: form })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed to run test')
+      if (!res.ok) {
+        const detail = data.upstream ? ` — upstream: ${JSON.stringify(data.upstream)}` : ''
+        throw new Error((data.error ?? 'Failed to run test') + detail)
+      }
 
       setCaptions(data.captions)
       setCdnUrl(data.cdnUrl ?? null)
