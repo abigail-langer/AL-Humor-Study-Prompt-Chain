@@ -198,12 +198,8 @@ export default function FlavorBuilder() {
       })
       const stepsData = await stepsRes.json()
       if (!stepsRes.ok) throw new Error(stepsData.error ?? 'Failed to save steps')
-      setSaveSuccess(true)
       await loadFlavors()
-      if (creating) {
-        setCreating(false)
-        await openFlavor(flavorId)
-      }
+      setView('list')
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
