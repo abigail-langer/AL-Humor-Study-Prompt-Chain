@@ -88,7 +88,16 @@ export default function FlavorTester({ flavorId }: { flavorId: string }) {
 
       setProgress(3)
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Pipeline failed')
+      if (!res.ok) {
+        const upstreamDetail =
+          data.upstream && typeof data.upstream === 'object'
+            ? (data.upstream as Record<string, unknown>).detail ?? (data.upstream as Record<string, unknown>).message ?? null
+            : typeof data.upstream === 'string'
+            ? data.upstream
+            : null
+        const msg = [data.error, upstreamDetail].filter(Boolean).join(' — ')
+        throw new Error(msg || 'Pipeline failed')
+      }
 
       setResultImage(data.cdnUrl)
       setCaptions(data.captions ?? [])

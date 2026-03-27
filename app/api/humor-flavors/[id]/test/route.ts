@@ -114,9 +114,10 @@ export async function POST(
   }
 
   // ── Step 4b: Generate captions with the specific humor flavor ────────────
+  // Send both camelCase and snake_case so the API accepts either convention
   const captionsFlavor = await postUpstream(
     '/pipeline/generate-captions',
-    { imageId, humorFlavorId },
+    { imageId, humorFlavorId, humor_flavor_id: humorFlavorId },
     token
   )
   if (!captionsFlavor.ok) {
