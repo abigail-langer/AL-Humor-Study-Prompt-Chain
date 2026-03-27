@@ -43,10 +43,8 @@ type StepOptions = {
 
 const DEFAULT_MODEL_ID = 1
 const DEFAULT_OUTPUT_TYPE_ID = 1
-const STEP1_STEP_TYPE_ID = 2
 const DEFAULT_STEP_TYPE_ID = 3
-const INPUT_IMAGE_AND_TEXT = 1
-const INPUT_TEXT_ONLY = 2
+const DEFAULT_INPUT_TYPE_ID = 1
 
 function slugify(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -56,15 +54,15 @@ function labelFor(item: LookupItem) {
   return item.name ?? item.description ?? item.slug ?? String(item.id)
 }
 
-function emptyDraft(isFirst: boolean): StepDraft {
+function emptyDraft(): StepDraft {
   return {
     order_by: 0,
     llm_system_prompt: '',
     llm_user_prompt: '',
     llm_model_id: DEFAULT_MODEL_ID,
-    llm_input_type_id: isFirst ? INPUT_IMAGE_AND_TEXT : INPUT_TEXT_ONLY,
+    llm_input_type_id: DEFAULT_INPUT_TYPE_ID,
     llm_output_type_id: DEFAULT_OUTPUT_TYPE_ID,
-    humor_flavor_step_type_id: isFirst ? STEP1_STEP_TYPE_ID : DEFAULT_STEP_TYPE_ID,
+    humor_flavor_step_type_id: DEFAULT_STEP_TYPE_ID,
     llm_temperature: null,
   }
 }
@@ -72,7 +70,7 @@ function emptyDraft(isFirst: boolean): StepDraft {
 // ── Step form ─────────────────────────────────────────────────────────────────
 
 function StepForm({
-  draft, onChange, onSave, onCancel, saving, error, isFirst, stepOptions, saveLabel,
+  draft, onChange, onSave, onCancel, saving, error, stepOptions, saveLabel,
 }: {
   draft: StepDraft
   onChange: (patch: Partial<StepDraft>) => void
@@ -80,7 +78,6 @@ function StepForm({
   onCancel: () => void
   saving: boolean
   error: string | null
-  isFirst: boolean
   stepOptions: StepOptions
   saveLabel: string
 }) {
@@ -89,7 +86,7 @@ function StepForm({
       ?.is_temperature_supported ?? true
 
   return (
-    <div className={`rounded-xl border bg-white p-5 shadow-sm ${isFirst ? 'border-sky-200' : 'border-violet-100'}`}>
+    <div className="rounded-xl border border-violet-100 bg-white p-5 shadow-sm">
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-violet-400">Model</label>
@@ -100,14 +97,10 @@ function StepForm({
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-violet-400">Input Type</label>
-          {isFirst ? (
-            <div className="rounded-md border border-violet-100 bg-violet-50 px-2 py-1.5 text-xs text-violet-400">Image &amp; Text</div>
-          ) : (
-            <select value={draft.llm_input_type_id} onChange={e => onChange({ llm_input_type_id: Number(e.target.value) })}
-              className="w-full rounded-md border border-violet-200 px-2 py-1.5 text-xs text-violet-900 focus:border-violet-400 focus:outline-none">
-              {stepOptions.inputTypes.map(t => <option key={t.id} value={t.id}>{labelFor(t)}</option>)}
-            </select>
-          )}
+          <select value={draft.llm_input_type_id} onChange={e => onChange({ llm_input_type_id: Number(e.target.value) })}
+            className="w-full rounded-md border border-violet-200 px-2 py-1.5 text-xs text-violet-900 focus:border-violet-400 focus:outline-none">
+            {stepOptions.inputTypes.map(t => <option key={t.id} value={t.id}>{labelFor(t)}</option>)}
+          </select>
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-violet-400">Output Type</label>
@@ -118,14 +111,10 @@ function StepForm({
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-violet-400">Step Type</label>
-          {isFirst ? (
-            <div className="rounded-md border border-violet-100 bg-violet-50 px-2 py-1.5 text-xs text-violet-400">Image Description</div>
-          ) : (
-            <select value={draft.humor_flavor_step_type_id} onChange={e => onChange({ humor_flavor_step_type_id: Number(e.target.value) })}
-              className="w-full rounded-md border border-violet-200 px-2 py-1.5 text-xs text-violet-900 focus:border-violet-400 focus:outline-none">
-              {stepOptions.stepTypes.map(t => <option key={t.id} value={t.id}>{labelFor(t)}</option>)}
-            </select>
-          )}
+          <select value={draft.humor_flavor_step_type_id} onChange={e => onChange({ humor_flavor_step_type_id: Number(e.target.value) })}
+            className="w-full rounded-md border border-violet-200 px-2 py-1.5 text-xs text-violet-900 focus:border-violet-400 focus:outline-none">
+            {stepOptions.stepTypes.map(t => <option key={t.id} value={t.id}>{labelFor(t)}</option>)}
+          </select>
         </div>
       </div>
 
@@ -148,7 +137,7 @@ function StepForm({
           <label className="mb-1 block text-xs font-medium text-violet-400">System Prompt</label>
           <textarea value={draft.llm_system_prompt}
             onChange={e => onChange({ llm_system_prompt: e.target.value })}
-            placeholder={isFirst ? 'You are an expert image analyst…' : 'You are a…'}
+            placeholder="You are a…"
             rows={3}
             className="w-full rounded-md border border-violet-200 px-3 py-2 text-sm text-violet-900 placeholder:text-violet-300 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
           />
@@ -157,7 +146,7 @@ function StepForm({
           <label className="mb-1 block text-xs font-medium text-violet-400">User Prompt</label>
           <textarea value={draft.llm_user_prompt}
             onChange={e => onChange({ llm_user_prompt: e.target.value })}
-            placeholder={isFirst ? 'Describe this image in thorough detail…' : 'Given the image description, generate…'}
+            placeholder="Generate…"
             rows={3}
             className="w-full rounded-md border border-violet-200 px-3 py-2 text-sm text-violet-900 placeholder:text-violet-300 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
           />
@@ -203,7 +192,7 @@ export default function FlavorBuilder() {
   const [deletingFlavor, setDeletingFlavor] = useState(false)
 
   const [editingStepId, setEditingStepId] = useState<string | 'new' | null>(null)
-  const [stepDraft, setStepDraft] = useState<StepDraft>(emptyDraft(true))
+  const [stepDraft, setStepDraft] = useState<StepDraft>(emptyDraft())
   const [savingStep, setSavingStep] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
   const [deletingStepId, setDeletingStepId] = useState<string | null>(null)
@@ -280,8 +269,6 @@ export default function FlavorBuilder() {
         setFlavor(data)
         setSlug(data.slug)
         await loadFlavors()
-        setEditingStepId('new')
-        setStepDraft(emptyDraft(true))
       } else {
         const savedSlug = name ? slugify(name) : flavor.slug
         const res = await fetch(`/api/humor-flavors/${flavor.id}`, {
@@ -322,7 +309,7 @@ export default function FlavorBuilder() {
   }
 
   const openNewStep = () => {
-    setStepDraft(emptyDraft(steps.length === 0))
+    setStepDraft(emptyDraft())
     setStepError(null)
     setEditingStepId('new')
   }
@@ -535,37 +522,32 @@ export default function FlavorBuilder() {
 
               <div className="space-y-3">
                 {steps.map((step, idx) => {
-                  const isFirst = idx === 0
                   if (editingStepId === step.id) {
                     return (
                       <div key={step.id}>
                         <div className="mb-2 flex items-center gap-2">
-                          <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white ${isFirst ? 'bg-sky-500' : 'bg-violet-500'}`}>
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
                             {idx + 1}
                           </div>
                           <span className="text-sm font-semibold text-violet-800">Step {idx + 1}</span>
-                          {isFirst && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-600">Image Description</span>}
                         </div>
                         <StepForm draft={stepDraft}
                           onChange={patch => setStepDraft(prev => ({ ...prev, ...patch }))}
                           onSave={handleSaveStep} onCancel={() => setEditingStepId(null)}
-                          saving={savingStep} error={stepError} isFirst={isFirst}
+                          saving={savingStep} error={stepError}
                           stepOptions={stepOptions} saveLabel="Save Step" />
                       </div>
                     )
                   }
                   return (
                     <div key={step.id}
-                      className={`flex items-start justify-between rounded-xl border bg-white p-4 shadow-sm ${isFirst ? 'border-sky-200' : 'border-violet-100'}`}>
+                      className="flex items-start justify-between rounded-xl border border-violet-100 bg-white p-4 shadow-sm">
                       <div className="flex items-start gap-3">
-                        <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${isFirst ? 'bg-sky-500' : 'bg-violet-500'}`}>
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
                           {idx + 1}
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-violet-900">Step {idx + 1}</span>
-                            {isFirst && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-600">Image Description</span>}
-                          </div>
+                          <span className="text-sm font-semibold text-violet-900">Step {idx + 1}</span>
                           {step.llm_system_prompt && (
                             <p className="mt-1 line-clamp-1 text-xs text-violet-500">{step.llm_system_prompt}</p>
                           )}
@@ -586,18 +568,15 @@ export default function FlavorBuilder() {
                 {editingStepId === 'new' && (
                   <div>
                     <div className="mb-2 flex items-center gap-2">
-                      <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white ${steps.length === 0 ? 'bg-sky-500' : 'bg-violet-500'}`}>
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
                         {steps.length + 1}
                       </div>
-                      <span className="text-sm font-semibold text-violet-800">
-                        {steps.length === 0 ? 'First Step' : `Step ${steps.length + 1}`}
-                      </span>
-                      {steps.length === 0 && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-600">Image Description</span>}
+                      <span className="text-sm font-semibold text-violet-800">Step {steps.length + 1}</span>
                     </div>
                     <StepForm draft={stepDraft}
                       onChange={patch => setStepDraft(prev => ({ ...prev, ...patch }))}
                       onSave={handleSaveStep} onCancel={() => setEditingStepId(null)}
-                      saving={savingStep} error={stepError} isFirst={steps.length === 0}
+                      saving={savingStep} error={stepError}
                       stepOptions={stepOptions} saveLabel="Add Step" />
                   </div>
                 )}
