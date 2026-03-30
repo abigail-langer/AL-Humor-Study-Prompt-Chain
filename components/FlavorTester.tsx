@@ -18,7 +18,7 @@ function Stepper({ progress }: { progress: number }) {
         const done = i < progress
         const active = i === progress
         return (
-          <div key={label} className="flex flex-1 flex-col items-center gap-1">
+          <div key={label} className="relative flex flex-1 flex-col items-center gap-1">
             <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-colors ${
               done
                 ? 'bg-violet-600 text-white'
@@ -32,7 +32,7 @@ function Stepper({ progress }: { progress: number }) {
               active ? 'text-violet-600 dark:text-violet-400' : done ? 'text-violet-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-600'
             }`}>{label}</span>
             {i < PIPELINE_STEPS.length - 1 && (
-              <div className="absolute hidden" />
+              <div className={`absolute top-3.5 left-1/2 h-0.5 w-full transition-colors ${done ? 'bg-violet-400 dark:bg-violet-700' : 'bg-gray-200 dark:bg-gray-700'}`} />
             )}
           </div>
         )
