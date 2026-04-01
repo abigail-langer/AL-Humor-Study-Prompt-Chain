@@ -1,7 +1,21 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import CaptionViewer from '@/components/CaptionViewer'
 import FlavorTester from '@/components/FlavorTester'
 
@@ -68,6 +82,104 @@ function emptyDraft(): StepDraft {
     humor_flavor_step_type_id: DEFAULT_STEP_TYPE_ID,
     llm_temperature: null,
   }
+}
+
+// ── Drag handle icon ──────────────────────────────────────────────────────────
+
+function DragHandleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="4" r="1.5" />
+      <circle cx="11" cy="4" r="1.5" />
+      <circle cx="5" cy="8" r="1.5" />
+      <circle cx="11" cy="8" r="1.5" />
+      <circle cx="5" cy="12" r="1.5" />
+      <circle cx="11" cy="12" r="1.5" />
+    </svg>
+  )
+}
+
+// ── Sortable step row ─────────────────────────────────────────────────────────
+
+function SortableStepRow({
+  step,
+  idx,
+  isDraggingDisabled,
+  deletingStepId,
+  onEdit,
+  onDelete,
+}: {
+  step: FlavorStep
+  idx: number
+  isDraggingDisabled: boolean
+  deletingStepId: string | null
+  onEdit: (step: FlavorStep) => void
+  onDelete: (id: string) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: step.id, disabled: isDraggingDisabled })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-start justify-between rounded-xl border bg-white p-4 shadow-sm dark:bg-gray-900 ${
+        isDragging
+          ? 'border-violet-400 shadow-lg opacity-80 dark:border-violet-500'
+          : 'border-violet-100 dark:border-gray-700'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex flex-col items-center gap-1">
+          <button
+            {...attributes}
+            {...listeners}
+            disabled={isDraggingDisabled}
+            className="flex h-7 w-7 cursor-grab items-center justify-center rounded text-violet-300 transition-colors hover:text-violet-500 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-30 dark:text-gray-600 dark:hover:text-gray-400"
+            title="Drag to reorder"
+            aria-label="Drag to reorder step"
+          >
+            <DragHandleIcon />
+          </button>
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
+            {idx + 1}
+          </div>
+        </div>
+        <div>
+          <span className="text-sm font-semibold text-violet-900 dark:text-gray-100">Step {idx + 1}</span>
+          {step.llm_system_prompt && (
+            <p className="mt-1 line-clamp-1 text-xs text-violet-500 dark:text-gray-400">{step.llm_system_prompt}</p>
+          )}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-3 pl-4">
+        <button
+          onClick={() => onEdit(step)}
+          className="text-xs text-violet-400 transition-colors hover:text-violet-700 dark:text-gray-500 dark:hover:text-gray-300"
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => onDelete(step.id)}
+          disabled={deletingStepId === step.id}
+          className="text-xs text-red-400 transition-colors hover:text-red-600 disabled:opacity-40"
+        >
+          {deletingStepId === step.id ? 'Deleting…' : 'Delete'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 // ── Step form ─────────────────────────────────────────────────────────────────
@@ -200,7 +312,10 @@ export default function FlavorBuilder() {
   const [savingStep, setSavingStep] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
   const [deletingStepId, setDeletingStepId] = useState<string | null>(null)
-  const [reorderingStepId, setReorderingStepId] = useState<string | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
 
   const loadFlavors = useCallback(async () => {
     setLoadingList(true)
@@ -368,32 +483,35 @@ export default function FlavorBuilder() {
     }
   }
 
-  const handleReorderStep = async (stepId: string, direction: 'up' | 'down') => {
-    if (!flavor) return
-    const idx = steps.findIndex(s => s.id === stepId)
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (swapIdx < 0 || swapIdx >= steps.length) return
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id || !flavor) return
 
-    const stepA = steps[idx]
-    const stepB = steps[swapIdx]
-    setReorderingStepId(stepId)
-    try {
-      await Promise.all([
-        fetch(`/api/humor-flavors/${flavor.id}/steps/${stepA.id}`, {
+    const oldIndex = steps.findIndex(s => s.id === active.id)
+    const newIndex = steps.findIndex(s => s.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const reordered = arrayMove(steps, oldIndex, newIndex).map((s, i) => ({
+      ...s,
+      order_by: i + 1,
+    }))
+
+    setSteps(reordered)
+
+    const changed = reordered.filter(s => {
+      const original = steps.find(os => os.id === s.id)
+      return original && original.order_by !== s.order_by
+    })
+
+    await Promise.all(
+      changed.map(s =>
+        fetch(`/api/humor-flavors/${flavor.id}/steps/${s.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_by: stepB.order_by }),
-        }),
-        fetch(`/api/humor-flavors/${flavor.id}/steps/${stepB.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_by: stepA.order_by }),
-        }),
-      ])
-      await loadSteps(flavor.id)
-    } finally {
-      setReorderingStepId(null)
-    }
+          body: JSON.stringify({ order_by: s.order_by }),
+        })
+      )
+    )
   }
 
   const handleDeleteStep = async (stepId: string) => {
@@ -593,82 +711,65 @@ export default function FlavorBuilder() {
                 </div>
               )}
 
-              <div className="space-y-3">
-                {steps.map((step, idx) => {
-                  if (editingStepId === step.id) {
-                    return (
-                      <motion.div key={step.id} layout transition={{ type: 'spring', stiffness: 400, damping: 35 }}>
-                        <div className="mb-2 flex items-center gap-2">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
-                            {idx + 1}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={steps.map(s => s.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3">
+                    {steps.map((step, idx) => {
+                      if (editingStepId === step.id) {
+                        return (
+                          <div key={step.id}>
+                            <div className="mb-2 flex items-center gap-2">
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
+                                {idx + 1}
+                              </div>
+                              <span className="text-sm font-semibold text-violet-800 dark:text-gray-200">Step {idx + 1}</span>
+                            </div>
+                            <StepForm draft={stepDraft}
+                              onChange={patch => setStepDraft(prev => ({ ...prev, ...patch }))}
+                              onSave={handleSaveStep} onCancel={() => setEditingStepId(null)}
+                              saving={savingStep} error={stepError}
+                              stepOptions={stepOptions} saveLabel="Save Step" />
                           </div>
-                          <span className="text-sm font-semibold text-violet-800 dark:text-gray-200">Step {idx + 1}</span>
-                        </div>
-                        <StepForm draft={stepDraft}
-                          onChange={patch => setStepDraft(prev => ({ ...prev, ...patch }))}
-                          onSave={handleSaveStep} onCancel={() => setEditingStepId(null)}
-                          saving={savingStep} error={stepError}
-                          stepOptions={stepOptions} saveLabel="Save Step" />
-                      </motion.div>
-                    )
-                  }
-                  const isReordering = reorderingStepId === step.id
-                  return (
-                    <motion.div key={step.id} layout transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-                      className="flex items-start justify-between rounded-xl border border-violet-100 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-                      <div className="flex items-start gap-3">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <button
-                            onClick={() => handleReorderStep(step.id, 'up')}
-                            disabled={idx === 0 || isReordering || !!editingStepId}
-                            className="flex h-5 w-5 items-center justify-center rounded text-violet-300 transition-colors hover:text-violet-600 disabled:cursor-not-allowed disabled:opacity-20 dark:text-gray-600 dark:hover:text-gray-300"
-                            title="Move up"
-                          >▲</button>
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
-                            {idx + 1}
-                          </div>
-                          <button
-                            onClick={() => handleReorderStep(step.id, 'down')}
-                            disabled={idx === steps.length - 1 || isReordering || !!editingStepId}
-                            className="flex h-5 w-5 items-center justify-center rounded text-violet-300 transition-colors hover:text-violet-600 disabled:cursor-not-allowed disabled:opacity-20 dark:text-gray-600 dark:hover:text-gray-300"
-                            title="Move down"
-                          >▼</button>
-                        </div>
-                        <div>
-                          <span className="text-sm font-semibold text-violet-900 dark:text-gray-100">Step {idx + 1}</span>
-                          {step.llm_system_prompt && (
-                            <p className="mt-1 line-clamp-1 text-xs text-violet-500 dark:text-gray-400">{step.llm_system_prompt}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-3 pl-4">
-                        <button onClick={() => openEditStep(step)} disabled={isReordering}
-                          className="text-xs text-violet-400 transition-colors hover:text-violet-700 disabled:opacity-40 dark:text-gray-500 dark:hover:text-gray-300">Edit</button>
-                        <button onClick={() => handleDeleteStep(step.id)} disabled={deletingStepId === step.id || isReordering}
-                          className="text-xs text-red-400 transition-colors hover:text-red-600 disabled:opacity-40">
-                          {deletingStepId === step.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      </div>
-                    </motion.div>
-                  )
-                })}
-
-                {editingStepId === 'new' && (
-                  <div>
-                    <div className="mb-2 flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
-                        {steps.length + 1}
-                      </div>
-                      <span className="text-sm font-semibold text-violet-800 dark:text-gray-200">Step {steps.length + 1}</span>
-                    </div>
-                    <StepForm draft={stepDraft}
-                      onChange={patch => setStepDraft(prev => ({ ...prev, ...patch }))}
-                      onSave={handleSaveStep} onCancel={() => setEditingStepId(null)}
-                      saving={savingStep} error={stepError}
-                      stepOptions={stepOptions} saveLabel="Add Step" />
+                        )
+                      }
+                      return (
+                        <SortableStepRow
+                          key={step.id}
+                          step={step}
+                          idx={idx}
+                          isDraggingDisabled={!!editingStepId}
+                          deletingStepId={deletingStepId}
+                          onEdit={openEditStep}
+                          onDelete={handleDeleteStep}
+                        />
+                      )
+                    })}
                   </div>
-                )}
-              </div>
+                </SortableContext>
+              </DndContext>
+
+              {editingStepId === 'new' && (
+                <div className="mt-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-xs font-bold text-white">
+                      {steps.length + 1}
+                    </div>
+                    <span className="text-sm font-semibold text-violet-800 dark:text-gray-200">Step {steps.length + 1}</span>
+                  </div>
+                  <StepForm draft={stepDraft}
+                    onChange={patch => setStepDraft(prev => ({ ...prev, ...patch }))}
+                    onSave={handleSaveStep} onCancel={() => setEditingStepId(null)}
+                    saving={savingStep} error={stepError}
+                    stepOptions={stepOptions} saveLabel="Add Step" />
+                </div>
+              )}
             </div>
           )}
 
