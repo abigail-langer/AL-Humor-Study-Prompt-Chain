@@ -306,6 +306,10 @@ export default function FlavorBuilder() {
   const [savingFlavor, setSavingFlavor] = useState(false)
   const [flavorError, setFlavorError] = useState<string | null>(null)
   const [deletingFlavor, setDeletingFlavor] = useState(false)
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [duplicateName, setDuplicateName] = useState('')
+  const [duplicating, setDuplicating] = useState(false)
+  const [duplicateError, setDuplicateError] = useState<string | null>(null)
 
   const [editingStepId, setEditingStepId] = useState<string | 'new' | null>(null)
   const [stepDraft, setStepDraft] = useState<StepDraft>(emptyDraft())
@@ -427,6 +431,39 @@ export default function FlavorBuilder() {
       backToList()
     } finally {
       setDeletingFlavor(false)
+    }
+  }
+
+  const openDuplicateModal = () => {
+    setDuplicateName('')
+    setDuplicateError(null)
+    setShowDuplicateModal(true)
+  }
+
+  const handleDuplicateFlavor = async () => {
+    if (!flavor) return
+    const newSlug = slugify(duplicateName)
+    if (!newSlug) {
+      setDuplicateError('Name is required')
+      return
+    }
+    setDuplicating(true)
+    setDuplicateError(null)
+    try {
+      const res = await fetch(`/api/humor-flavors/${flavor.id}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: newSlug }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to duplicate flavor')
+      setShowDuplicateModal(false)
+      await loadFlavors()
+      await openFlavor(data)
+    } catch (err) {
+      setDuplicateError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setDuplicating(false)
     }
   }
 
@@ -601,10 +638,16 @@ export default function FlavorBuilder() {
             ← Back
           </button>
           {!isCreating && (
-            <button onClick={handleDeleteFlavor} disabled={deletingFlavor}
-              className="text-sm text-red-400 transition-colors hover:text-red-600 disabled:opacity-40">
-              {deletingFlavor ? 'Deleting…' : 'Delete flavor'}
-            </button>
+            <div className="flex items-center gap-4">
+              <button onClick={openDuplicateModal}
+                className="text-sm text-violet-500 transition-colors hover:text-violet-800 dark:text-gray-400 dark:hover:text-gray-200">
+                Duplicate flavor
+              </button>
+              <button onClick={handleDeleteFlavor} disabled={deletingFlavor}
+                className="text-sm text-red-400 transition-colors hover:text-red-600 disabled:opacity-40">
+                {deletingFlavor ? 'Deleting…' : 'Delete flavor'}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -791,6 +834,51 @@ export default function FlavorBuilder() {
 
         </div>
       </div>
+
+      {/* Duplicate modal */}
+      {showDuplicateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-violet-100 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
+            <h2 className="mb-4 text-base font-bold text-violet-900 dark:text-gray-100">Duplicate Flavor</h2>
+            <p className="mb-4 text-sm text-violet-500 dark:text-gray-400">
+              Enter a unique name for the duplicate of <span className="font-medium">{flavor?.slug}</span>. All steps will be copied.
+            </p>
+            <div className="mb-1">
+              <label className="mb-1 block text-xs font-medium text-violet-500 dark:text-gray-400">New Name</label>
+              <input
+                type="text"
+                value={duplicateName}
+                onChange={e => setDuplicateName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleDuplicateFlavor() }}
+                placeholder="e.g. Dry Wit v2"
+                autoFocus
+                className={inputCls}
+              />
+            </div>
+            {duplicateName && (
+              <p className="mb-4 mt-1 text-xs text-violet-400 dark:text-gray-500">
+                Slug: <span className="font-mono">{slugify(duplicateName)}</span>
+              </p>
+            )}
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                onClick={handleDuplicateFlavor}
+                disabled={duplicating || !duplicateName}
+                className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {duplicating ? 'Duplicating…' : 'Duplicate'}
+              </button>
+              <button
+                onClick={() => setShowDuplicateModal(false)}
+                className="text-sm text-violet-400 transition-colors hover:text-violet-700 dark:text-gray-500 dark:hover:text-gray-300"
+              >
+                Cancel
+              </button>
+              {duplicateError && <span className="text-sm text-red-500">{duplicateError}</span>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
