@@ -12,7 +12,11 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     .eq('id', params.id)
     .single()
 
-  if (flavorError) return NextResponse.json({ error: flavorError.message }, { status: 404 })
+  if (flavorError) {
+    // PGRST116 = no rows returned by .single(); treat as 404. All other errors are 500.
+    const status = flavorError.code === 'PGRST116' ? 404 : 500
+    return NextResponse.json({ error: flavorError.message }, { status })
+  }
 
   const { data: steps, error: stepsError } = await supabase
     .from('humor_flavor_steps')
